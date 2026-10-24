@@ -33,6 +33,10 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# Registration state — asset pubkeys from successful devnet registrations.
+# Not a secret, but keeping it out of Git avoids accidental state commits.
+/data/
+
 # vercel
 .vercel
 
