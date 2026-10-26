@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 /**
  * app/agent-registry/page.tsx
  * Agent Registry — Phase 2B.
