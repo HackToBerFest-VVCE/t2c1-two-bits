@@ -3,7 +3,12 @@
 import { Card, SectionHeading, EmptyState, DataRow } from "@/components/ui";
 import { useEffect, useState } from "react";
 
-type Task = {
+type AgentRecord = {
+  agentId: string;
+  asset: string;
+  // other fields may be present
+};
+
   id: string;
   title: string;
   description: string;
@@ -15,11 +20,17 @@ type Task = {
   createdAt: string;
 };
 
+type AgentRecord = {
+  agentId: string;
+  asset: string;
+  // other fields may be present
+};
+
 export default function TaskCenterClient() {
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading] = useState(true);
 
-  const [agents, setAgents] = useState<any[]>([]);
+  const [agents, setAgents] = useState<AgentRecord[]>([]);
   const [agentsLoading, setAgentsLoading] = useState(true);
 
   const [title, setTitle] = useState("");
@@ -50,7 +61,7 @@ export default function TaskCenterClient() {
       const res = await fetch("/api/tasks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, description, category }),
+        body: JSON.stringify({ title, description, category, agentId: selectedAgentId || undefined }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Submission failed");
@@ -157,6 +168,7 @@ export default function TaskCenterClient() {
                 <DataRow label="Title">{t.title}</DataRow>
                 <DataRow label="Category">{t.category}</DataRow>
                 <DataRow label="Mode">{t.mode === "live" ? "Live Agent" : "Simulated Demo"}</DataRow>
+                {t.agentId && <DataRow label="Agent">{t.agentId}</DataRow>}
                 <DataRow label="Status">{t.status}</DataRow>
                 {t.result && <DataRow label="Result">{t.result}</DataRow>}
                 <DataRow label="Created">{new Date(t.createdAt).toLocaleString()}</DataRow>

@@ -74,6 +74,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ ok: false, error: "Missing required fields" }, { status: 400 });
   }
 
+  const agentIdValue = (body as any).agentId;
+  if (agentIdValue !== undefined && typeof agentIdValue !== "string") {
+    return NextResponse.json({ ok: false, error: "Invalid agentId" }, { status: 400 });
+  }
   // Create task record (no live agent selection for now)
   const id = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const createdAt = new Date().toISOString();
@@ -83,7 +87,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     title,
     description,
     category,
-    mode: demo.mode,
+    agentId,
     status: "completed",
     result: demo.result,
     createdAt,
