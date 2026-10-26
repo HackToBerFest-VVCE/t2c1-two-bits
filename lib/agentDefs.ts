@@ -62,10 +62,7 @@ export const COORDINATOR_AGENT: AgentDefinition = {
       },
     ],
 
-    // Optional OASF skills — validated by buildRegistrationFileJson()
-    skills: [
-      "natural_language_processing/text_generation/text_generation",
-    ],
+    // No OASF skills are required for this demo agent.
 
     // Optional OASF domains
     domains: [

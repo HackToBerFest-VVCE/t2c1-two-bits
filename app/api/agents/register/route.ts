@@ -32,6 +32,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { SendTransactionError } from "@solana/web3.js";
 import { promises as fs } from "fs";
 import path from "path";
 import { buildRegistrationFileJson } from "8004-solana";
@@ -76,8 +77,17 @@ async function saveRegistrationRecord(record: RegistrationRecord): Promise<void>
   } else {
     existing.push(record);
   }
-  await fs.mkdir(DATA_DIR, { recursive: true });
-  await fs.writeFile(REGISTRY_FILE, JSON.stringify(existing, null, 2), "utf-8");
+  try {
+    await fs.mkdir(DATA_DIR, { recursive: true });
+    await fs.writeFile(REGISTRY_FILE, JSON.stringify(existing, null, 2), "utf-8");
+  } catch (err) {
+    // Fallback to project root if cwd points elsewhere (e.g., when running from .next)
+    const fallbackDir = path.join(__dirname, "../../../data");
+    const fallbackFile = path.join(fallbackDir, "registered-agents.json");
+    await fs.mkdir(fallbackDir, { recursive: true });
+    await fs.writeFile(fallbackFile, JSON.stringify(existing, null, 2), "utf-8");
+    console.warn('[register] Saved registration record using fallback path due to error:', err);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -290,7 +300,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     let userMsg = `On-chain registration failed: ${msg}`;
     let code = "REGISTRATION_FAILED";
 
-    if (msg.toLowerCase().includes("insufficient") || msg.toLowerCase().includes("balance")) {
+    // Detect insufficient SOL (debit without prior credit) from SendTransactionError
+    if (err instanceof SendTransactionError && err.message.includes("Attempt to debit an account but found no record of a prior credit")) {
+      userMsg =
+        "Insufficient SOL balance. Registration requires ~0.0093 SOL. " +
+        "Airdrop devnet SOL at https://faucet.solana.com or with `solana airdrop 1 <pubkey> --url devnet`.";
+      code = "INSUFFICIENT_SOL";
+    } else if (msg.toLowerCase().includes("insufficient") || msg.toLowerCase().includes("balance")) {
       userMsg =
         "Insufficient SOL balance. Registration requires ~0.0093 SOL. " +
         "Airdrop devnet SOL at https://faucet.solana.com or with `solana airdrop 1 <pubkey> --url devnet`.";

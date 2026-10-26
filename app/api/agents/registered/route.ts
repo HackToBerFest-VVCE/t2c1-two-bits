@@ -24,6 +24,10 @@ import { isSignerConfigured, isIpfsConfigured, PROGRAM_IDS, INDEXER_URL } from "
 export const dynamic = "force-dynamic";
 
 const REGISTRY_FILE = path.join(process.cwd(), "data", "registered-agents.json");
+// In some environments (e.g., when running from a compiled .next directory),
+// process.cwd() may point to the build folder. Fallback to the project root
+// relative to this file if the primary path does not exist.
+const FALLBACK_REGISTRY_FILE = path.join(__dirname, "../../../data/registered-agents.json");
 
 type RegistrationRecord = {
   agentId: string;
@@ -38,7 +42,13 @@ async function loadRecords(): Promise<RegistrationRecord[]> {
     const raw = await fs.readFile(REGISTRY_FILE, "utf-8");
     return JSON.parse(raw) as RegistrationRecord[];
   } catch {
-    return [];
+    // Try fallback location
+    try {
+      const raw = await fs.readFile(FALLBACK_REGISTRY_FILE, "utf-8");
+      return JSON.parse(raw) as RegistrationRecord[];
+    } catch {
+      return [];
+    }
   }
 }
 
