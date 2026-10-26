@@ -136,7 +136,20 @@ export default function TaskCenterClient() {
 
       <Card>
         <SectionHeading>Recent Tasks</SectionHeading>
-        {loading ? (
+        {error && !loading ? (
+          <div className="space-y-2">
+            <p className="text-sm text-red-500">Error loading tasks: {error}</p>
+            <button className="btn btn-secondary btn-sm" onClick={() => {
+              setLoading(true);
+              setError(null);
+              // retry fetch
+              fetch('/api/tasks')
+                .then(r => r.json())
+                .then(data => { setTasks(data.tasks ?? []); setLoading(false); })
+                .catch(e => { console.error(e); setError(e instanceof Error ? e.message : String(e)); setLoading(false); });
+            }}>Retry</button>
+          </div>
+        ) : loading ? (
           <p className="text-sm text-[var(--text-muted)]">Loading tasks…</p>
         ) : tasks.length === 0 ? (
           <EmptyState
