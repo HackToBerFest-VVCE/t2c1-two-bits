@@ -56,6 +56,16 @@ interface RegisteredApiResponse {
   }> | null;
 }
 
+type LiveDataMap = Record<string, {
+  nft_name?: string;
+  owner?: string;
+  agent_uri?: string;
+  atom_enabled?: boolean;
+  collection?: string;
+  error?: string;
+}>;
+
+
 interface RegisterApiResponse {
   ok: boolean;
   alreadyRegistered?: boolean;
@@ -473,7 +483,7 @@ function RegistrationPanel() {
   const loadStatus = useCallback(async () => {
     setState({ phase: "loading_config" });
     try {
-      const res = await fetch("/api/agents/registered");
+      const res = await fetch("/api/agents/registered?load=true");
       const data: RegisteredApiResponse = await res.json();
       setState({
         phase: "ready",
@@ -732,13 +742,15 @@ function RegistrationPanel() {
 
 function RegisteredAgentsList() {
   const [records, setRecords] = useState<RegistrationRecord[] | null>(null);
+  const [liveData, setLiveData] = useState<LiveDataMap>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/agents/registered")
+    fetch("/api/agents/registered?load=true")
       .then((r) => r.json())
       .then((d: RegisteredApiResponse) => {
         setRecords(d.records);
+        setLiveData(d.liveData ?? {});
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -779,11 +791,39 @@ function RegisteredAgentsList() {
   }
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
-      {records.map((rec) => (
-        <RegisteredAgentCard key={rec.asset} record={rec} />
-      ))}
-    </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {records.map((rec) => (
+          <div key={rec.asset} className="space-y-2">
+            <RegisteredAgentCard record={rec} />
+            {/* On‑chain info if available */}
+            {liveData && liveData[rec.asset] && (
+              <div className="text-xs text-[var(--text-muted)] mt-1 space-y-1">
+                {liveData[rec.asset].error ? (
+                  <p>On‑chain error: {liveData[rec.asset].error}</p>
+                ) : (
+                  <>
+                    {liveData[rec.asset].nft_name && (
+                      <p>NFT name: {liveData[rec.asset].nft_name}</p>
+                    )}
+                    {liveData[rec.asset].owner && (
+                      <p>Owner: {liveData[rec.asset].owner}</p>
+                    )}
+                    {liveData[rec.asset].agent_uri && (
+                      <p>Agent URI: {liveData[rec.asset].agent_uri}</p>
+                    )}
+                    {typeof liveData[rec.asset].atom_enabled === "boolean" && (
+                      <p>ATOM enabled: {liveData[rec.asset].atom_enabled ? "yes" : "no"}</p>
+                    )}
+                    {liveData[rec.asset].collection && (
+                      <p>Collection: {liveData[rec.asset].collection}</p>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
   );
 }
 
