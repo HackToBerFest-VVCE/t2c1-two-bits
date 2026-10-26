@@ -24,9 +24,19 @@ type Task = {
 export default function TaskCenterClient() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
+  const [agents, setAgents] = useState<AgentRecord[]>([]);
+  const [agentsLoading, setAgentsLoading] = useState(true);
+  const [selectedAgentId, setSelectedAgentId] = useState<string>("");
+
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [category, setCategory] = useState("general");
+  const [submitting, setSubmitting] = useState(false);
+
+  // Load task history
   useEffect(() => {
-    // Fetch tasks
     fetch("/api/tasks")
       .then((r) => r.json())
       .then((data) => {
@@ -39,7 +49,7 @@ export default function TaskCenterClient() {
         setLoading(false);
       });
 
-    // Fetch agents (separate, failures do not affect task loading)
+    // Load registered agents (independent of tasks)
     fetch("/api/agents/registered")
       .then((r) => r.json())
       .then((data) => {
@@ -65,16 +75,14 @@ export default function TaskCenterClient() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Submission failed");
+      // prepend new task to list
       setTasks((prev) => [data.task, ...prev]);
       setTitle("");
       setDescription("");
       setCategory("general");
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError(String(err));
-      }
+      if (err instanceof Error) setError(err.message);
+      else setError(String(err));
     } finally {
       setSubmitting(false);
     }
@@ -87,30 +95,15 @@ export default function TaskCenterClient() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs text-[var(--text-muted)] mb-1.5">Title</label>
-            <input
-              className="task-input"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Summarize a paper"
-            />
+            <input className="task-input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Summarize a paper" />
           </div>
           <div>
             <label className="block text-xs text-[var(--text-muted)] mb-1.5">Description</label>
-            <textarea
-              className="task-textarea"
-              rows={4}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Describe the task in detail…"
-            />
+            <textarea className="task-textarea" rows={4} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe the task in detail…" />
           </div>
           <div>
             <label className="block text-xs text-[var(--text-muted)] mb-1.5">Category</label>
-            <select
-              className="task-select"
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-            >
+            <select className="task-select" value={category} onChange={(e) => setCategory(e.target.value)}>
               <option value="research">Research / Summarization</option>
               <option value="coding">Code Review / Generation</option>
               <option value="analysis">Data Analysis</option>
@@ -124,11 +117,7 @@ export default function TaskCenterClient() {
             ) : agents.length === 0 ? (
               <p className="text-sm text-[var(--text-muted)]">No registered agents. Register an agent first.</p>
             ) : (
-              <select
-                className="task-select"
-                value={selectedAgentId}
-                onChange={(e) => setSelectedAgentId(e.target.value)}
-              >
+              <select className="task-select" value={selectedAgentId} onChange={(e) => setSelectedAgentId(e.target.value)}>
                 <option value="">-- None (Demo) --</option>
                 {agents.map((a) => (
                   <option key={a.agentId} value={a.agentId}>
@@ -148,17 +137,12 @@ export default function TaskCenterClient() {
       <Card>
         <SectionHeading>Recent Tasks</SectionHeading>
         {loading ? (
-          <p className="text-sm text-[var(--text-muted)]">Loading…</p>
+          <p className="text-sm text-[var(--text-muted)]">Loading tasks…</p>
         ) : tasks.length === 0 ? (
           <EmptyState
-            icon={
-              <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
-                <rect x="2" y="2" width="12" height="12" rx="2" />
-                <path d="M5 8h6M5 5.5h4" strokeLinecap="round" />
-              </svg>
-            }
+            icon={<svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><rect x="2" y="2" width="12" height="12" rx="2" /><path d="M5 8h6M5 5.5h4" strokeLinecap="round"/></svg>}
             title="No tasks yet"
-            subtitle="Submit a task to see it appear here."
+            subtitle="Submit your first task."
           />
         ) : (
           <div className="space-y-3">
