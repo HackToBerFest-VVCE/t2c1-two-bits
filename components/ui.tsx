@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * components/ui.tsx
  * Shared design primitives — no third-party UI library required.
