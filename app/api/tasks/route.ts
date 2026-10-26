@@ -74,11 +74,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ ok: false, error: "Missing required fields" }, { status: 400 });
   }
 
-  const agentIdValue = (body as any).agentId;
+  const agentIdValue = (body as { agentId?: unknown }).agentId;
   if (agentIdValue !== undefined && typeof agentIdValue !== "string") {
     return NextResponse.json({ ok: false, error: "Invalid agentId" }, { status: 400 });
   }
-  // Create task record (no live agent selection for now)
+     const agentId = agentIdValue;
+   // Create task record (no live agent selection for now)
   const id = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const createdAt = new Date().toISOString();
   const demo = deterministicDemo({ title, description, category });
@@ -88,7 +89,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     description,
     category,
     agentId,
-    status: "completed",
+    mode: demo.mode,
+  status: "completed",
     result: demo.result,
     createdAt,
   };

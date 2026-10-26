@@ -9,6 +9,7 @@ type AgentRecord = {
   // other fields may be present
 };
 
+type Task = {
   id: string;
   title: string;
   description: string;
@@ -20,26 +21,25 @@ type AgentRecord = {
   createdAt: string;
 };
 
-type AgentRecord = {
-  agentId: string;
-  asset: string;
-  // other fields may be present
-};
-
 export default function TaskCenterClient() {
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [loading] = useState(true);
-
-  const [agents, setAgents] = useState<AgentRecord[]>([]);
-  const [agentsLoading, setAgentsLoading] = useState(true);
-
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [category, setCategory] = useState("general");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Fetch tasks
+    fetch("/api/tasks")
+      .then((r) => r.json())
+      .then((data) => {
+        setTasks(data.tasks ?? []);
+        setLoading(false);
+      })
+      .catch((e) => {
+        console.error(e);
+        setError(e instanceof Error ? e.message : String(e));
+        setLoading(false);
+      });
+
+    // Fetch agents (separate, failures do not affect task loading)
     fetch("/api/agents/registered")
       .then((r) => r.json())
       .then((data) => {
@@ -117,28 +117,28 @@ export default function TaskCenterClient() {
               <option value="general">General Assistance</option>
             </select>
           </div>
-                      <div>
-              <label className="block text-xs text-[var(--text-muted)] mb-1.5">Agent</label>
-              {agentsLoading ? (
-                <p className="text-sm text-[var(--text-muted)]">Loading agents…</p>
-              ) : agents.length === 0 ? (
-                <p className="text-sm text-[var(--text-muted)]">No registered agents. Register an agent first.</p>
-              ) : (
-                <select
-                  className="task-select"
-                  value={selectedAgentId}
-                  onChange={(e) => setSelectedAgentId(e.target.value)}
-                >
-                  <option value="">-- None (Demo) --</option>
-                  {agents.map((a) => (
-                    <option key={a.agentId} value={a.agentId}>
-                      {a.asset} ({a.agentId})
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-            {error && <p className="text-sm text-red-500">{error}</p>}
+          <div>
+            <label className="block text-xs text-[var(--text-muted)] mb-1.5">Agent</label>
+            {agentsLoading ? (
+              <p className="text-sm text-[var(--text-muted)]">Loading agents…</p>
+            ) : agents.length === 0 ? (
+              <p className="text-sm text-[var(--text-muted)]">No registered agents. Register an agent first.</p>
+            ) : (
+              <select
+                className="task-select"
+                value={selectedAgentId}
+                onChange={(e) => setSelectedAgentId(e.target.value)}
+              >
+                <option value="">-- None (Demo) --</option>
+                {agents.map((a) => (
+                  <option key={a.agentId} value={a.agentId}>
+                    {a.asset} ({a.agentId})
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+          {error && <p className="text-sm text-red-500">{error}</p>}
           <button type="submit" className="btn btn-primary btn-md w-full" disabled={submitting}>
             {submitting ? "Submitting…" : "Submit Task"}
           </button>
