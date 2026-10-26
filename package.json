@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.44.0",
     "@solana/web3.js": "^1.99.0",
     "8004-solana": "^0.8.5",
     "next": "^15.5.28",
