@@ -1,6 +1,7 @@
 "use client";
 
 import { Card, SectionHeading, EmptyState, DataRow } from "@/components/ui";
+import { CATEGORY_TO_SKILLS } from "@/lib/skillMap";
 import { useEffect, useState } from "react";
 
 type AgentRecord = {
@@ -22,6 +23,16 @@ type Task = {
 };
 
 export default function TaskCenterClient() {
+  // Types for on‑chain live data returned by /api/agents/registered?load=true
+  type LiveDataMap = Record<string, {
+    nft_name?: string;
+    owner?: string;
+    agent_uri?: string;
+    atom_enabled?: boolean;
+    collection?: string;
+    error?: string;
+  }>;
+
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -29,6 +40,9 @@ export default function TaskCenterClient() {
   const [agents, setAgents] = useState<AgentRecord[]>([]);
   const [agentsLoading, setAgentsLoading] = useState(true);
   const [selectedAgentId, setSelectedAgentId] = useState<string>("");
+  // const [recommendedAgentId, setRecommendedAgentId] = useState<string>("");
+  const [recommendationReason, setRecommendationReason] = useState<string>("");
+  const [agentsLiveData, setAgentsLiveData] = useState<LiveDataMap>({});
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -50,16 +64,43 @@ export default function TaskCenterClient() {
       });
 
     // Load registered agents (independent of tasks)
-    fetch("/api/agents/registered")
+    fetch("/api/agents/registered?load=true")
       .then((r) => r.json())
       .then((data) => {
         setAgents(data.records ?? []);
+        setAgentsLiveData(data.liveData ?? {});
         setAgentsLoading(false);
       })
       .catch(() => setAgentsLoading(false));
   }, []);
 
-  async function handleSubmit(e: React.FormEvent) {
+  // Compute recommendation based on loaded agents and live data
+  useEffect(() => {
+    if (agentsLoading) return;
+    // Determine first agent with on‑chain endpoint (agent_uri)
+    let recId = "";
+    let reason = "";
+    for (const a of agents) {
+      const live = agentsLiveData[a.asset];
+      if (live && live.agent_uri) {
+        recId = a.agentId;
+        reason = `Agent "${a.agentId}" provides an on‑chain A2A endpoint (${live.agent_uri}).`;
+        break;
+      }
+    }
+    if (!recId) {
+      reason = "No registered agents expose a live A2A endpoint; the task will run in simulated demo mode.";
+    }
+    // setRecommendedAgentId(recId);
+    setRecommendationReason(reason);
+    // Pre‑select recommendation if user hasn't manually chosen an agent yet
+    if (!selectedAgentId) {
+      setSelectedAgentId(recId);
+    }
+  }, [agents, agentsLiveData, agentsLoading, selectedAgentId]);
+
+
+    async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     if (!title.trim() || !description.trim()) {
@@ -126,6 +167,19 @@ export default function TaskCenterClient() {
                 ))}
               </select>
             )}
+            {/* Recommendation explanation */}
+            {recommendationReason && (
+              <p className="text-sm text-[var(--text-muted)] mt-1">
+                Recommendation: {recommendationReason}
+              </p>
+            )}
+            {/* Display inferred required skills */}
+            {CATEGORY_TO_SKILLS[category] && CATEGORY_TO_SKILLS[category].length > 0 && (
+              <p className="text-xs text-[var(--text-muted)] mt-1">
+                Required skills: {CATEGORY_TO_SKILLS[category].join(', ')}
+              </p>
+            )}
+
           </div>
           {error && <p className="text-sm text-red-500">{error}</p>}
           <button type="submit" className="btn btn-primary btn-md w-full" disabled={submitting}>
