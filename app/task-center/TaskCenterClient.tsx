@@ -45,19 +45,19 @@ export default function TaskCenterClient() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const [agents, setAgents] = useState<AgentRecord[]>([]);
   const [agentsLoading, setAgentsLoading] = useState(true);
   const [selectedAgentId, setSelectedAgentId] = useState<string>("");
-  // const [recommendedAgentId, setRecommendedAgentId] = useState<string>("");
   const [recommendationReason, setRecommendationReason] = useState<string>("");
   const [agentsLiveData, setAgentsLiveData] = useState<LiveDataMap>({});
-  // Reputation data keyed by agentId
   const [agentsReputation, setAgentsReputation] = useState<Record<string, ReputationSummary | null>>({});
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("general");
+  const [submitting, setSubmitting] = useState(false);
   const [executionMode, setExecutionMode] = useState<"demo" | "live">("demo");
 
   // Load task history
@@ -70,7 +70,7 @@ export default function TaskCenterClient() {
       })
       .catch((e) => {
         console.error(e);
-        setError(e instanceof Error ? e.message : String(e));
+        setLoadError(e instanceof Error ? e.message : String(e));
         setLoading(false);
       });
 
@@ -99,7 +99,7 @@ export default function TaskCenterClient() {
             if (data.ok && data.summary) {
               reps[a.agentId] = data.summary;
             } else {
-              reps[a.agentId] = null; // No data
+              reps[a.agentId] = null;
             }
           } catch {
             reps[a.agentId] = null;
@@ -117,7 +117,6 @@ export default function TaskCenterClient() {
   // Compute recommendation using reputation (or fallback) once data is ready
   useEffect(() => {
     if (agentsLoading) return;
-    // Agents with a reputation summary (non‑null)
     const agentsWithRep = agents.filter((a) => {
       const rep = agentsReputation[a.agentId];
       return rep && rep.totalFeedbacks && rep.totalFeedbacks > 0 && typeof rep.averageScore === 'number';
@@ -125,7 +124,6 @@ export default function TaskCenterClient() {
     let recId = "";
     let reason = "";
     if (agentsWithRep.length > 0) {
-      // Sort by averageScore, then totalFeedbacks
       agentsWithRep.sort((a, b) => {
         const ra = agentsReputation[a.agentId];
         const rb = agentsReputation[b.agentId];
@@ -138,7 +136,6 @@ export default function TaskCenterClient() {
       recId = best.agentId;
       reason = `Agent "${best.agentId}" selected based on reputation: avgScore ${bestRep?.averageScore ?? 0}, feedbacks ${bestRep?.totalFeedbacks ?? 0}, positives ${bestRep?.positiveCount ?? 0}, negatives ${bestRep?.negativeCount ?? 0}.`;
     } else {
-      // Fallback to metadata URI (as before)
       for (const a of agents) {
         const live = agentsLiveData[a.asset];
         if (live && live.agent_uri) {
@@ -151,7 +148,6 @@ export default function TaskCenterClient() {
         reason = "No registered agents expose a live A2A endpoint; the task will run in simulated demo mode.";
       }
     }
-    // If only one agent and no reputation data, explain limitation
     if (agents.length <= 1 && agentsWithRep.length === 0) {
       reason = "Only one agent is registered and no reputation data is available; a reliable comparative ranking cannot be established.";
     }
@@ -161,8 +157,7 @@ export default function TaskCenterClient() {
     }
   }, [agents, agentsLiveData, agentsReputation, agentsLoading, selectedAgentId]);
 
-
-    async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     if (!title.trim() || !description.trim()) {
@@ -178,7 +173,6 @@ export default function TaskCenterClient() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Submission failed");
-      // prepend new task to list
       setTasks((prev) => [data.task, ...prev]);
       setTitle("");
       setDescription("");
@@ -228,50 +222,48 @@ export default function TaskCenterClient() {
                   </option>
                 ))}
               </select>
-            </div>
-            <div>
-              <label className="block text-xs text-[var(--text-muted)] mb-1.5">Execution Mode</label>
-              <select className="task-select" value={executionMode} onChange={(e) => setExecutionMode(e.target.value as "demo" | "live")}>
-                <option value="demo">Demo (simulated)</option>
-                <option value="live">Live Agent</option>
-              </select>
-            </div>
             )}
-            {selectedAgentId && (
-                (() => {
-                  const rep = agentsReputation[selectedAgentId];
-                  if (!rep || !rep.totalFeedbacks || rep.totalFeedbacks === 0) {
-                    return (
-                      <p className="text-sm text-[var(--text-muted)] mt-1">
-                        No reputation data available.
-                      </p>
-                    );
-                  }
-                  const parts: string[] = [];
-                  parts.push(`avg: ${rep.averageScore !== undefined ? rep.averageScore : 'Not available'}`);
-                  parts.push(`feedbacks: ${rep.totalFeedbacks !== undefined ? rep.totalFeedbacks : 'Not available'}`);
-                  parts.push(`positives: ${rep.positiveCount !== undefined ? rep.positiveCount : 'Not available'}`);
-                  parts.push(`negatives: ${rep.negativeCount !== undefined ? rep.negativeCount : 'Not available'}`);
-                  return (
-                    <p className="text-sm text-[var(--text-muted)] mt-1">
-                      Reputation – {parts.join(', ')}
-                    </p>
-                  );
-                })())}
-  
-            {recommendationReason && (
-              <p className="text-sm text-[var(--text-muted)] mt-1">
-                Recommendation: {recommendationReason}
-              </p>
-            )}
-            {/* Display inferred required skills */}
-            {CATEGORY_TO_SKILLS[category] && CATEGORY_TO_SKILLS[category].length > 0 && (
-              <p className="text-xs text-[var(--text-muted)] mt-1">
-                Required skills: {CATEGORY_TO_SKILLS[category].join(', ')}
-              </p>
-            )}
-
           </div>
+          <div>
+            <label className="block text-xs text-[var(--text-muted)] mb-1.5">Execution Mode</label>
+            <select className="task-select" value={executionMode} onChange={(e) => setExecutionMode(e.target.value as "demo" | "live")}>
+              <option value="demo">Demo (simulated)</option>
+              <option value="live">Live Agent</option>
+            </select>
+          </div>
+          {selectedAgentId && (
+            (() => {
+              const rep = agentsReputation[selectedAgentId];
+              if (!rep || !rep.totalFeedbacks || rep.totalFeedbacks === 0) {
+                return (
+                  <p className="text-sm text-[var(--text-muted)] mt-1">
+                    No reputation data available.
+                  </p>
+                );
+              }
+              const parts: string[] = [];
+              parts.push(`avg: ${rep.averageScore !== undefined ? rep.averageScore : 'Not available'}`);
+              parts.push(`feedbacks: ${rep.totalFeedbacks !== undefined ? rep.totalFeedbacks : 'Not available'}`);
+              parts.push(`positives: ${rep.positiveCount !== undefined ? rep.positiveCount : 'Not available'}`);
+              parts.push(`negatives: ${rep.negativeCount !== undefined ? rep.negativeCount : 'Not available'}`);
+              return (
+                <p className="text-sm text-[var(--text-muted)] mt-1">
+                  Reputation – {parts.join(', ')}
+                </p>
+              );
+            })()
+          )}
+          {recommendationReason && (
+            <p className="text-sm text-[var(--text-muted)] mt-1">
+              Recommendation: {recommendationReason}
+            </p>
+          )}
+          {/* Display inferred required skills */}
+          {CATEGORY_TO_SKILLS[category] && CATEGORY_TO_SKILLS[category].length > 0 && (
+            <p className="text-xs text-[var(--text-muted)] mt-1">
+              Required skills: {CATEGORY_TO_SKILLS[category].join(', ')}
+            </p>
+          )}
           {error && <p className="text-sm text-red-500">{error}</p>}
           <button type="submit" className="btn btn-primary btn-md w-full" disabled={submitting}>
             {submitting ? "Submitting…" : "Submit Task"}
@@ -281,17 +273,16 @@ export default function TaskCenterClient() {
 
       <Card>
         <SectionHeading>Recent Tasks</SectionHeading>
-        {error && !loading ? (
+        {loadError && !loading ? (
           <div className="space-y-2">
-            <p className="text-sm text-red-500">Error loading tasks: {error}</p>
+            <p className="text-sm text-red-500">Error loading tasks: {loadError}</p>
             <button className="btn btn-secondary btn-sm" onClick={() => {
               setLoading(true);
-              setError(null);
-              // retry fetch
+              setLoadError(null);
               fetch('/api/tasks')
                 .then(r => r.json())
                 .then(data => { setTasks(data.tasks ?? []); setLoading(false); })
-                .catch(e => { console.error(e); setError(e instanceof Error ? e.message : String(e)); setLoading(false); });
+                .catch(e => { console.error(e); setLoadError(e instanceof Error ? e.message : String(e)); setLoading(false); });
             }}>Retry</button>
           </div>
         ) : loading ? (
