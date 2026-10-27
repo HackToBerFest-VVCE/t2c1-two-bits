@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { delegateTask } from "@/lib/agentDelegation";
 import { getReadOnlySdk } from "@/lib/registry";
-import { ServiceType } from "8004-solana";
-
 import { promises as fs } from "fs";
 import path from "path";
 import { PublicKey } from "@solana/web3.js";
+import { ServiceType } from "8004-solana";
+
 
 // Types (mirroring client)
 type Task = {
@@ -119,9 +119,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         }) as { value: string } | undefined;
         if (svc) perAgentEndpoint = svc.value;
       }
-      if (!perAgentEndpoint && onChainAgent?.agent_uri) {
-        perAgentEndpoint = onChainAgent.agent_uri;
-      }
+
     } catch {
       // ignore errors – will handle missing endpoint below
     }

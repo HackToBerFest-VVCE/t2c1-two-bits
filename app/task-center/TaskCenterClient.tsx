@@ -179,7 +179,7 @@ export default function TaskCenterClient() {
     if (!selectedAgentId) {
       setSelectedAgentId(recId);
     }
-  }, [agents, agentsLiveData, agentsReputation, agentsLoading, selectedAgentId]);
+  }, [agents, agentsLiveData, agentsReputation, agentsLoading, selectedAgentId, category]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -246,6 +246,39 @@ export default function TaskCenterClient() {
                   </option>
                 ))}
               </select>
+            )}
+            {/* Selected agent details */}
+            {selectedAgentId && (
+              <div className="border rounded p-3 mb-4 text-sm text-[var(--text-muted)]">
+                <p><strong>Agent ID:</strong> {selectedAgentId}</p>
+                <p><strong>Asset:</strong> {agents.find((a) => a.agentId === selectedAgentId)?.asset ?? 'Unknown'}</p>
+                <p><strong>Metadata URI:</strong> {agentsLiveData[agents.find((a) => a.agentId === selectedAgentId)?.asset ?? '']?.agent_uri || 'None'}</p>
+                <p><strong>Declared capabilities:</strong> {agentsLiveData[agents.find((a) => a.agentId === selectedAgentId)?.asset ?? '']?.domains?.join(', ') || 'Unknown'}</p>
+                <p><strong>Reputation:</strong> {(() => {
+                  const rep = agentsReputation[selectedAgentId];
+                  if (!rep || !rep.totalFeedbacks) return 'No reputation data available.';
+                  const parts: string[] = [];
+                  parts.push(`avg: ${rep.averageScore ?? 'N/A'}`);
+                  parts.push(`feedbacks: ${rep.totalFeedbacks}`);
+                  parts.push(`positives: ${rep.positiveCount ?? 'N/A'}`);
+                  parts.push(`negatives: ${rep.negativeCount ?? 'N/A'}`);
+                  return parts.join(', ');
+                })()}</p>
+                <p><strong>A2A endpoint:</strong> {agentsLiveData[agents.find((a) => a.agentId === selectedAgentId)?.asset ?? '']?.atom_enabled ? 'Enabled (endpoint discovery on submission)' : 'Unknown'}</p>
+                <p><strong>Capability match:</strong> {(() => {
+                  const live = agentsLiveData[agents.find((a) => a.agentId === selectedAgentId)?.asset ?? ''];
+                  const domains = live?.domains;
+                  const requiredSkills = CATEGORY_TO_SKILLS[category] ?? [];
+                  if (Array.isArray(domains) && requiredSkills.length > 0) {
+                    const matched = requiredSkills.filter((s) => domains.includes(s));
+                    const missing = requiredSkills.filter((s) => !domains.includes(s));
+                    if (matched.length === requiredSkills.length) return `Full match (all required skills present)`;
+                    if (matched.length > 0) return `Partial match – matched: ${matched.join(', ')}, missing: ${missing.join(', ')}`;
+                    return 'No matching skills.';
+                  }
+                  return 'Capability match unknown (no capability metadata).';
+                })()}</p>
+              </div>
             )}
           </div>
           <div>
