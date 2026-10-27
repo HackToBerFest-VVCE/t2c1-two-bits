@@ -22,6 +22,15 @@ type Task = {
   createdAt: string;
 };
 
+type ReputationSummary = {
+  averageScore: number;
+  totalFeedbacks: number;
+  nextFeedbackIndex?: number;
+  totalClients?: number;
+  positiveCount?: number;
+  negativeCount?: number;
+};
+
 export default function TaskCenterClient() {
   // Types for on‑chain live data returned by /api/agents/registered?load=true
   type LiveDataMap = Record<string, {
@@ -43,6 +52,8 @@ export default function TaskCenterClient() {
   // const [recommendedAgentId, setRecommendedAgentId] = useState<string>("");
   const [recommendationReason, setRecommendationReason] = useState<string>("");
   const [agentsLiveData, setAgentsLiveData] = useState<LiveDataMap>({});
+  // Reputation data keyed by agentId
+  const [agentsReputation, setAgentsReputation] = useState<Record<string, ReputationSummary | null>>({});
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -74,30 +85,78 @@ export default function TaskCenterClient() {
       .catch(() => setAgentsLoading(false));
   }, []);
 
-  // Compute recommendation based on loaded agents and live data
+  // Load reputation data for each agent after agents are loaded
   useEffect(() => {
     if (agentsLoading) return;
-    // Determine first agent with on‑chain endpoint (agent_uri)
+    let cancelled = false;
+    const fetchReps = async () => {
+      const reps: Record<string, ReputationSummary | null> = {};
+      await Promise.all(
+        agents.map(async (a) => {
+          try {
+            const res = await fetch(`/api/agents/reputation?agentId=${encodeURIComponent(a.agentId)}`);
+            const data = await res.json();
+            if (data.ok && data.summary) {
+              reps[a.agentId] = data.summary;
+            } else {
+              reps[a.agentId] = null; // No data
+            }
+          } catch {
+            reps[a.agentId] = null;
+          }
+        })
+      );
+      if (!cancelled) setAgentsReputation(reps);
+    };
+    fetchReps();
+    return () => {
+      cancelled = true;
+    };
+  }, [agents, agentsLoading]);
+
+  // Compute recommendation using reputation (or fallback) once data is ready
+  useEffect(() => {
+    if (agentsLoading) return;
+    // Agents with a reputation summary (non‑null)
+    const agentsWithRep = agents.filter((a) => agentsReputation[a.agentId]);
     let recId = "";
     let reason = "";
-    for (const a of agents) {
-      const live = agentsLiveData[a.asset];
-      if (live && live.agent_uri) {
-        recId = a.agentId;
-        reason = `Agent "${a.agentId}" provides an on‑chain A2A endpoint (${live.agent_uri}).`;
-        break;
+    if (agentsWithRep.length > 0) {
+      // Sort by averageScore, then totalFeedbacks
+      agentsWithRep.sort((a, b) => {
+        const ra = agentsReputation[a.agentId];
+        const rb = agentsReputation[b.agentId];
+        const scoreDiff = (rb?.averageScore ?? 0) - (ra?.averageScore ?? 0);
+        if (scoreDiff !== 0) return scoreDiff;
+        return (rb?.totalFeedbacks ?? 0) - (ra?.totalFeedbacks ?? 0);
+      });
+      const best = agentsWithRep[0];
+      const bestRep = agentsReputation[best.agentId];
+      recId = best.agentId;
+      reason = `Agent "${best.agentId}" selected based on reputation: avgScore ${bestRep?.averageScore ?? 0}, feedbacks ${bestRep?.totalFeedbacks ?? 0}, positives ${bestRep?.positiveCount ?? 0}, negatives ${bestRep?.negativeCount ?? 0}.`;
+    } else {
+      // Fallback to metadata URI (as before)
+      for (const a of agents) {
+        const live = agentsLiveData[a.asset];
+        if (live && live.agent_uri) {
+          recId = a.agentId;
+          reason = `Agent "${a.agentId}" reports an on‑chain A2A metadata URI (${live.agent_uri}); no verified callable endpoint, so the task will run in simulated demo mode.`;
+          break;
+        }
+      }
+      if (!recId) {
+        reason = "No registered agents expose a live A2A endpoint; the task will run in simulated demo mode.";
       }
     }
-    if (!recId) {
-      reason = "No registered agents expose a live A2A endpoint; the task will run in simulated demo mode.";
+    // If only one agent and no reputation data, explain limitation
+    if (agents.length <= 1 && agentsWithRep.length === 0) {
+      reason = "Only one agent is registered and no reputation data is available; a reliable comparative ranking cannot be established.";
     }
-    // setRecommendedAgentId(recId);
     setRecommendationReason(reason);
-    // Pre‑select recommendation if user hasn't manually chosen an agent yet
     if (!selectedAgentId) {
       setSelectedAgentId(recId);
     }
-  }, [agents, agentsLiveData, agentsLoading, selectedAgentId]);
+  }, [agents, agentsLiveData, agentsReputation, agentsLoading, selectedAgentId]);
 
 
     async function handleSubmit(e: React.FormEvent) {
@@ -167,7 +226,11 @@ export default function TaskCenterClient() {
                 ))}
               </select>
             )}
-            {/* Recommendation explanation */}
+            {selectedAgentId && agentsReputation[selectedAgentId] && (
+              <p className="text-sm text-[var(--text-muted)] mt-1">
+                Reputation – avg: {agentsReputation[selectedAgentId]?.averageScore}, feedbacks: {agentsReputation[selectedAgentId]?.totalFeedbacks}, positives: {agentsReputation[selectedAgentId]?.positiveCount ?? 0}, negatives: {agentsReputation[selectedAgentId]?.negativeCount ?? 0}
+              </p>
+            )}
             {recommendationReason && (
               <p className="text-sm text-[var(--text-muted)] mt-1">
                 Recommendation: {recommendationReason}
