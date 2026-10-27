@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { delegateTask } from "@/lib/agentDelegation";
-
+import { getReadOnlySdk } from "@/lib/registry";
+import { ServiceType } from "8004-solana";
 
 import { promises as fs } from "fs";
 import path from "path";
+import { PublicKey } from "@solana/web3.js";
 
 // Types (mirroring client)
 type Task = {
@@ -72,10 +74,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (typeof body !== "object" || body === null) {
     return NextResponse.json({ ok: false, error: "Missing required fields" }, { status: 400 });
   }
-  const { title, description, category } = body as { title?: unknown; description?: unknown; category?: unknown };
-  if (typeof title !== "string" || typeof description !== "string" || typeof category !== "string") {
+  const { title, description, category, mode } = body as { title?: unknown; description?: unknown; category?: unknown; mode?: unknown };
+  if (typeof title !== "string" || typeof description !== "string" || typeof category !== "string" || (mode !== "demo" && mode !== "live")) {
     return NextResponse.json({ ok: false, error: "Missing required fields" }, { status: 400 });
   }
+  const executionMode = mode as "demo" | "live";
 
   const agentIdValue = (body as { agentId?: unknown }).agentId;
   if (agentIdValue !== undefined && typeof agentIdValue !== "string") {
@@ -85,8 +88,47 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const id = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const createdAt = new Date().toISOString();
   let task: Task;
-  if (agentId) {
-    const delegation = await delegateTask({ title, description, category, agentId });
+  if (executionMode === "live") {
+    if (!agentId) {
+      return NextResponse.json({ ok: false, error: "Live mode requires an agentId" }, { status: 400 });
+    }
+    // Resolve per‑agent endpoint from on‑chain registry
+    const agentsFilePrimary = path.join(process.cwd(), "data", "registered-agents.json");
+    const agentsFileFallback = path.join(__dirname, "../../../data", "registered-agents.json");
+    let agentsRaw: string;
+    try {
+      agentsRaw = await fs.readFile(agentsFilePrimary, "utf-8");
+    } catch {
+      agentsRaw = await fs.readFile(agentsFileFallback, "utf-8");
+    }
+    const agentRecords: { agentId: string; asset: string }[] = JSON.parse(agentsRaw);
+    const rec = agentRecords.find((r) => r.agentId === agentId);
+    if (!rec) {
+      return NextResponse.json({ ok: false, error: "Selected agent not found in registry" }, { status: 400 });
+    }
+    const sdk = getReadOnlySdk();
+    let perAgentEndpoint: string | null = null;
+    try {
+      const onChainAgent = await sdk.loadAgent(new PublicKey(rec.asset));
+      // Attempt to locate an A2A service definition without using `any`
+      const services = (onChainAgent as unknown as { services?: unknown }).services;
+      if (Array.isArray(services)) {
+        const svc = (services as unknown[]).find((s) => {
+          const obj = s as { type?: unknown; value?: unknown };
+          return obj.type === ServiceType.A2A && typeof obj.value === "string";
+        }) as { value: string } | undefined;
+        if (svc) perAgentEndpoint = svc.value;
+      }
+      if (!perAgentEndpoint && onChainAgent?.agent_uri) {
+        perAgentEndpoint = onChainAgent.agent_uri;
+      }
+    } catch {
+      // ignore errors – will handle missing endpoint below
+    }
+    if (!perAgentEndpoint) {
+      return NextResponse.json({ ok: false, error: "Selected agent does not expose a supported A2A endpoint" }, { status: 400 });
+    }
+    const delegation = await delegateTask({ title, description, category, agentId, endpoint: perAgentEndpoint });
     // Persist task regardless of success
     task = {
       id,
@@ -100,20 +142,20 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       createdAt,
     };
     if (delegation.status === "failed") {
-      // Save then return error with task included
       const existing = await loadTasks();
       existing.unshift(task);
       await saveTasks(existing);
       return NextResponse.json({ ok: false, error: delegation.error ?? "Agent execution failed", task }, { status: 500 });
     }
   } else {
+    // Demo mode – ignore any agentId and run deterministic demo
     const demo = deterministicDemo({ title, description, category });
     task = {
       id,
       title,
       description,
       category,
-      agentId,
+      agentId: undefined,
       mode: demo.mode,
       status: "completed",
       result: demo.result,

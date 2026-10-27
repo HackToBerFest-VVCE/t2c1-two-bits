@@ -85,6 +85,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           agent_uri: agent.agent_uri,
           atom_enabled: agent.isAtomEnabled(),
           collection: agent.getCollectionPublicKey().toBase58(),
+          // OASF domains (capability identifiers) if present
+          domains: (agent as unknown as { domains?: unknown }).domains,
         };
       } else {
         liveData[rec.asset] = { error: "Agent not found on-chain" };

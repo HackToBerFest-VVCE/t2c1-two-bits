@@ -14,24 +14,34 @@
  * The endpoint is expected to accept a POST with JSON {title, description, category}
  * and respond with {result: string} on success.
  */
+// NOTE: Currently, live delegation uses a single globally configured endpoint (COORDINATOR_AGENT_ENDPOINT).
+// Per‑agent A2A endpoints are not yet supported; agents are selected based on reputation/capabilities
+// but task execution always targets the coordinator. Future versions may resolve each agent's
+// `agent_uri` and validate it before delegating.
 export async function delegateTask(params: {
   title: string;
   description: string;
   category: string;
   agentId?: string;
+  // Optional per‑agent endpoint; if omitted the global COORDINATOR_AGENT_ENDPOINT is used.
+  endpoint?: string;
 }): Promise<{ mode: "live"; status: "completed" | "failed"; result?: string; error?: string }> {
-  const { title, description, category, agentId } = params;
+  const { title, description, category, agentId, endpoint: suppliedEndpoint } = params;
   if (!agentId) {
     return { mode: "live", status: "failed", error: "No agentId supplied" };
   }
 
-  // Use only the explicitly configured coordinator endpoint via env var.
-  const envEndpoint = process.env.COORDINATOR_AGENT_ENDPOINT;
+  // Resolve endpoint: prefer per‑agent endpoint, otherwise global env var.
   let endpoint: string | null = null;
-  if (typeof envEndpoint === "string" && envEndpoint) {
-    endpoint = envEndpoint;
+  if (typeof suppliedEndpoint === "string" && suppliedEndpoint) {
+    endpoint = suppliedEndpoint;
+  } else {
+    const envEndpoint = process.env.COORDINATOR_AGENT_ENDPOINT;
+    if (typeof envEndpoint === "string" && envEndpoint) {
+      endpoint = envEndpoint;
+    }
   }
-  // No fallback to on‑chain metadata – live execution requires an explicit endpoint.
+  // No fallback beyond this – live execution requires an explicit endpoint.
 
   // Validate endpoint – must be http(s) and pass basic safety checks.
   if (endpoint) {

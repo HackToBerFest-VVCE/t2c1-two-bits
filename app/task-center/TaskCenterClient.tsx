@@ -40,6 +40,8 @@ export default function TaskCenterClient() {
     atom_enabled?: boolean;
     collection?: string;
     error?: string;
+    // OASF capability domains if present on‑chain
+    domains?: string[];
   }>;
 
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -136,16 +138,38 @@ export default function TaskCenterClient() {
       recId = best.agentId;
       reason = `Agent "${best.agentId}" selected based on reputation: avgScore ${bestRep?.averageScore ?? 0}, feedbacks ${bestRep?.totalFeedbacks ?? 0}, positives ${bestRep?.positiveCount ?? 0}, negatives ${bestRep?.negativeCount ?? 0}.`;
     } else {
+      // Attempt capability‑based recommendation when reputation is unavailable
+      let bestMatchAgentId = "";
+      let bestMatchReason = "";
+      const requiredSkills = CATEGORY_TO_SKILLS[category] ?? [];
       for (const a of agents) {
         const live = agentsLiveData[a.asset];
-        if (live && live.agent_uri) {
-          recId = a.agentId;
-          reason = `Agent "${a.agentId}" reports an on‑chain A2A metadata URI (${live.agent_uri}); no verified callable endpoint, so the task will run in simulated demo mode.`;
-          break;
+        const domains = live?.domains;
+        if (Array.isArray(domains) && requiredSkills.length > 0) {
+          const matched = requiredSkills.filter((s) => domains.includes(s));
+          const missing = requiredSkills.filter((s) => !domains.includes(s));
+          if (matched.length === requiredSkills.length) {
+            // Full capability match
+            bestMatchAgentId = a.agentId;
+            bestMatchReason = `Agent "${a.agentId}" declares all required capabilities (${requiredSkills.join(', ')}).`; 
+            break;
+          } else if (matched.length > 0 && !bestMatchAgentId) {
+            // Partial match – keep the first partial as fallback
+            bestMatchAgentId = a.agentId;
+            bestMatchReason = `Agent "${a.agentId}" partially matches required capabilities (matched: ${matched.join(', ')}, missing: ${missing.join(', ')}).`;
+          }
+        }
+        // If no capability metadata, fall back to presence of an on‑chain A2A URI
+        if (!bestMatchAgentId && live && live.agent_uri) {
+          bestMatchAgentId = a.agentId;
+          bestMatchReason = `Agent "${a.agentId}" reports an on‑chain A2A metadata URI (${live.agent_uri}), but capability metadata is unavailable; the task will run in simulated demo mode.`;
         }
       }
-      if (!recId) {
-        reason = "No registered agents expose a live A2A endpoint; the task will run in simulated demo mode.";
+      if (bestMatchAgentId) {
+        recId = bestMatchAgentId;
+        reason = bestMatchReason;
+      } else {
+        reason = "No registered agents expose verified capabilities, A2A endpoint, or capability metadata; the task will run in simulated demo mode.";
       }
     }
     if (agents.length <= 1 && agentsWithRep.length === 0) {
