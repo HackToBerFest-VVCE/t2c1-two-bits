@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { delegateTask } from "@/lib/agentDelegation";
 
 
 import { promises as fs } from "fs";
@@ -80,22 +81,45 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (agentIdValue !== undefined && typeof agentIdValue !== "string") {
     return NextResponse.json({ ok: false, error: "Invalid agentId" }, { status: 400 });
   }
-     const agentId = agentIdValue;
-   // Create task record (no live agent selection for now)
+  const agentId = agentIdValue;
   const id = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const createdAt = new Date().toISOString();
-  const demo = deterministicDemo({ title, description, category });
-  const task: Task = {
-    id,
-    title,
-    description,
-    category,
-    agentId,
-    mode: demo.mode,
-  status: "completed",
-    result: demo.result,
-    createdAt,
-  };
+  let task: Task;
+  if (agentId) {
+    const delegation = await delegateTask({ title, description, category, agentId });
+    // Persist task regardless of success
+    task = {
+      id,
+      title,
+      description,
+      category,
+      agentId,
+      mode: delegation.mode,
+      status: delegation.status,
+      result: delegation.result,
+      createdAt,
+    };
+    if (delegation.status === "failed") {
+      // Save then return error with task included
+      const existing = await loadTasks();
+      existing.unshift(task);
+      await saveTasks(existing);
+      return NextResponse.json({ ok: false, error: delegation.error ?? "Agent execution failed", task }, { status: 500 });
+    }
+  } else {
+    const demo = deterministicDemo({ title, description, category });
+    task = {
+      id,
+      title,
+      description,
+      category,
+      agentId,
+      mode: demo.mode,
+      status: "completed",
+      result: demo.result,
+      createdAt,
+    };
+  }
 
   const existing = await loadTasks();
   existing.unshift(task);

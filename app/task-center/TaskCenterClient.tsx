@@ -58,7 +58,7 @@ export default function TaskCenterClient() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("general");
-  const [submitting, setSubmitting] = useState(false);
+  const [executionMode, setExecutionMode] = useState<"demo" | "live">("demo");
 
   // Load task history
   useEffect(() => {
@@ -118,7 +118,10 @@ export default function TaskCenterClient() {
   useEffect(() => {
     if (agentsLoading) return;
     // Agents with a reputation summary (non‑null)
-    const agentsWithRep = agents.filter((a) => agentsReputation[a.agentId]);
+    const agentsWithRep = agents.filter((a) => {
+      const rep = agentsReputation[a.agentId];
+      return rep && rep.totalFeedbacks && rep.totalFeedbacks > 0 && typeof rep.averageScore === 'number';
+    });
     let recId = "";
     let reason = "";
     if (agentsWithRep.length > 0) {
@@ -171,7 +174,7 @@ export default function TaskCenterClient() {
       const res = await fetch("/api/tasks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, description, category, agentId: selectedAgentId || undefined }),
+        body: JSON.stringify({ title, description, category, agentId: selectedAgentId || undefined, mode: executionMode }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Submission failed");
@@ -225,12 +228,37 @@ export default function TaskCenterClient() {
                   </option>
                 ))}
               </select>
+            </div>
+            <div>
+              <label className="block text-xs text-[var(--text-muted)] mb-1.5">Execution Mode</label>
+              <select className="task-select" value={executionMode} onChange={(e) => setExecutionMode(e.target.value as "demo" | "live")}>
+                <option value="demo">Demo (simulated)</option>
+                <option value="live">Live Agent</option>
+              </select>
+            </div>
             )}
-            {selectedAgentId && agentsReputation[selectedAgentId] && (
-              <p className="text-sm text-[var(--text-muted)] mt-1">
-                Reputation – avg: {agentsReputation[selectedAgentId]?.averageScore}, feedbacks: {agentsReputation[selectedAgentId]?.totalFeedbacks}, positives: {agentsReputation[selectedAgentId]?.positiveCount ?? 0}, negatives: {agentsReputation[selectedAgentId]?.negativeCount ?? 0}
-              </p>
-            )}
+            {selectedAgentId && (
+                (() => {
+                  const rep = agentsReputation[selectedAgentId];
+                  if (!rep || !rep.totalFeedbacks || rep.totalFeedbacks === 0) {
+                    return (
+                      <p className="text-sm text-[var(--text-muted)] mt-1">
+                        No reputation data available.
+                      </p>
+                    );
+                  }
+                  const parts: string[] = [];
+                  parts.push(`avg: ${rep.averageScore !== undefined ? rep.averageScore : 'Not available'}`);
+                  parts.push(`feedbacks: ${rep.totalFeedbacks !== undefined ? rep.totalFeedbacks : 'Not available'}`);
+                  parts.push(`positives: ${rep.positiveCount !== undefined ? rep.positiveCount : 'Not available'}`);
+                  parts.push(`negatives: ${rep.negativeCount !== undefined ? rep.negativeCount : 'Not available'}`);
+                  return (
+                    <p className="text-sm text-[var(--text-muted)] mt-1">
+                      Reputation – {parts.join(', ')}
+                    </p>
+                  );
+                })())}
+  
             {recommendationReason && (
               <p className="text-sm text-[var(--text-muted)] mt-1">
                 Recommendation: {recommendationReason}
