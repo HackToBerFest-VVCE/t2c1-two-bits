@@ -18,7 +18,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { promises as fs } from "fs";
 import path from "path";
 import { PublicKey } from "@solana/web3.js";
-import { SolanaSDK } from "8004-solana";
+import { SolanaSDK, ServiceType } from "8004-solana";
 import { isSignerConfigured, isIpfsConfigured, PROGRAM_IDS, INDEXER_URL } from "@/lib/registry";
 
 export const dynamic = "force-dynamic";
@@ -87,6 +87,19 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           collection: agent.getCollectionPublicKey().toBase58(),
           // OASF domains (capability identifiers) if present
           domains: (agent as unknown as { domains?: unknown }).domains,
+          // Verified A2A endpoint if advertised
+          a2a_endpoint: (function(){
+            const services = (agent as unknown as { services?: unknown }).services;
+            if (Array.isArray(services)) {
+              const svc = (services as unknown[]).find((s) => {
+                const obj = s as { type?: unknown; value?: unknown };
+                return obj.type === ServiceType.A2A && typeof obj.value === "string" && /^https?:\/\//i.test(obj.value);
+              }) as { value: string } | undefined;
+              return svc ? svc.value : null;
+            }
+            return null;
+          })(),
+          error: undefined,
         };
       } else {
         liveData[rec.asset] = { error: "Agent not found on-chain" };

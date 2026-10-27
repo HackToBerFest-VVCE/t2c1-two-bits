@@ -42,6 +42,8 @@ export default function TaskCenterClient() {
     error?: string;
     // OASF capability domains if present on‑chain
     domains?: string[];
+    // Verified A2A endpoint if advertised in the registry
+    a2a_endpoint?: string | null;
   }>;
 
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -264,7 +266,7 @@ export default function TaskCenterClient() {
                   parts.push(`negatives: ${rep.negativeCount ?? 'N/A'}`);
                   return parts.join(', ');
                 })()}</p>
-                <p><strong>A2A endpoint:</strong> {agentsLiveData[agents.find((a) => a.agentId === selectedAgentId)?.asset ?? '']?.atom_enabled ? 'Enabled (endpoint discovery on submission)' : 'Unknown'}</p>
+                <p><strong>A2A endpoint:</strong> {agentsLiveData[agents.find((a) => a.agentId === selectedAgentId)?.asset ?? '']?.a2a_endpoint ? `Advertised (${agentsLiveData[agents.find((a) => a.agentId === selectedAgentId)?.asset ?? '']?.a2a_endpoint})` : 'Unknown'}</p>
                 <p><strong>Capability match:</strong> {(() => {
                   const live = agentsLiveData[agents.find((a) => a.agentId === selectedAgentId)?.asset ?? ''];
                   const domains = live?.domains;
